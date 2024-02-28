@@ -3,7 +3,7 @@
 
 # Ignore subdirectories
 */
-!skopeo/
+!skopeo-ib/
 
 # Ignore Files
 *.tgz
