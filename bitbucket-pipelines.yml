@@ -9,7 +9,7 @@ pipelines:
   default:
     - parallel:
       - step:
-          name: 'Bundle Repo1 code base for '
+          name: 'Bundle Repo1 code base for skopeo'
           script:
             - DATE=`date '+%Y%m%d-%H%M'`
             - BUNDLE="skopeo-ib"
@@ -28,7 +28,6 @@ pipelines:
       - step:
           name: 'grab images'
           script:
-            - echo "Your linting goes here..."
             # install deps
             - apt-get update && apt-get install -y skopeo
             - set -e
