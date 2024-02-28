@@ -24,7 +24,7 @@ pipelines:
                 "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" \
                 --form files=@"$BUNDLE_$DATE.bundle"
           artifacts: # defining the artifacts to be passed to each future step.
-            - skopeo-ib_$DATE.bundle
+            - $BUNDLE_$DATE.bundle
       - step:
           name: 'grab images'
           script:
