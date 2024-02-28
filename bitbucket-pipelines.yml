@@ -1,0 +1,54 @@
+# This is an example Starter pipeline configuration
+# Use a skeleton to build, test and deploy using manual and parallel steps
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+
+image: atlassian/default-image:4
+
+pipelines:
+  default:
+    - parallel:
+      - step:
+          name: 'Bundle Repo1 code base for '
+          script:
+            - DATE=`date '+%Y%m%d-%H%M'`
+            - BUNDLE="skopeo-ib"
+            - git submodule update --init --recursive
+            - cd $BUNDLE
+            - git bundle create --progress ../$BUNDLE_$DATE.bundle --all
+            - cd ..
+            - pwd            
+            - ls -alh $BUNDLE_$DATE.bundle
+            - |
+              curl -X POST \
+                "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" \
+                --form files=@"$BUNDLE_$DATE.bundle"
+          artifacts: # defining the artifacts to be passed to each future step.
+            - skopeo-ib_$DATE.bundle
+      - step:
+          name: 'grab images'
+          script:
+            - echo "Your linting goes here..."
+            # install deps
+            - apt-get update && apt-get install -y skopeo
+            - set -e
+            - echo "Setting Variables"
+            - IMAGE="skopeo-ib"
+            - DATE=`date '+%Y%m%d-%H%M'`
+            - skopeo login registry1.dso.mil -u $REGISTRY_USER -p $REGISTRY_TOKEN
+            - echo "Running skopeo"
+            - |
+              skopeo sync \
+                --src-creds=$REGISTRY_USER:$REGISTRY_TOKEN \
+                --src yaml --dest dir $IMAGE.yml $IMAGE
+            - echo "TARchiving Collected Image $IMAGE"
+            - tar -cvzf $IMAGE-$DATE.tgz $IMAGE
+            - pwd            
+            - ls -alh $IMAGE-$DATE.tgz
+            - |
+              curl -X POST \
+                "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" \
+                --form files=@"$IMAGE-$DATE.tgz"
+          artifacts: # defining the artifacts to be passed to each future step.
+           - $IMAGE-$DATE.tgz
+

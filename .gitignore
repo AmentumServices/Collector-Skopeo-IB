@@ -1,0 +1,11 @@
+# Ignore .vagrant
+.vagrant*
+
+# Ignore subdirectories
+*/
+!skopeo/
+
+# Ignore Files
+*.tgz
+*.zip
+*.bundle
