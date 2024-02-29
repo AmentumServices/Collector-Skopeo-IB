@@ -14,7 +14,7 @@ pipelines:
             - DATE=`date '+%Y%m%d-%H%M'`
             - BUNDLE="skopeo-ib"
             - git submodule update --init --recursive
-            - git bundle create --progress ./$BUNDLE_$DATE.bundle --all
+            - git bundle create --progress $BUNDLE_$DATE.bundle --all
             - ls -alh $BUNDLE_$DATE.bundle
             - |
               curl -X POST \
