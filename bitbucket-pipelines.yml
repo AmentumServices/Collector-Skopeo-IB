@@ -14,10 +14,7 @@ pipelines:
             - DATE=`date '+%Y%m%d-%H%M'`
             - BUNDLE="skopeo-ib"
             - git submodule update --init --recursive
-            - cd $BUNDLE
             - git bundle create --progress ../$BUNDLE_$DATE.bundle --all
-            - cd ..
-            - pwd            
             - ls -alh $BUNDLE_$DATE.bundle
             - |
               curl -X POST \
@@ -28,21 +25,16 @@ pipelines:
       - step:
           name: 'grab images'
           script:
-            # install deps
-            - apt-get update && apt-get install -y skopeo
-            - set -e
-            - echo "Setting Variables"
             - IMAGE="skopeo-ib"
             - DATE=`date '+%Y%m%d-%H%M'`
+            # install deps
+            - apt-get update && apt-get install -y skopeo
             - skopeo login registry1.dso.mil -u $REGISTRY_USER -p $REGISTRY_TOKEN
-            - echo "Running skopeo"
             - |
               skopeo sync \
                 --src-creds=$REGISTRY_USER:$REGISTRY_TOKEN \
                 --src yaml --dest dir $IMAGE.yml $IMAGE
-            - echo "TARchiving Collected Image $IMAGE"
             - tar -cvzf $IMAGE-$DATE.tgz $IMAGE
-            - pwd            
             - ls -alh $IMAGE-$DATE.tgz
             - |
               curl -X POST \
