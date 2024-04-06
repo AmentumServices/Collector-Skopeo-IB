@@ -4,6 +4,7 @@
 # Ignore subdirectories
 */
 !skopeo-ib/
+!.github/
 
 # Ignore Files
 *.tgz
