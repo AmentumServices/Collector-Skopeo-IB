@@ -64,13 +64,15 @@ jobs:
         id: DATE
         run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Update Submodules
+      - name: Update Submodules if needed
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
-          git submodule update --init --recursive
-          git commit -am "${{ steps.date.outputs.date }}: Update Submodules"
+          git submodule update --init --recursive --remote
+          git add -A
+          git commit -m "${{ steps.date.outputs.date }}: Update Submodules"
           git push
+          exit 0
 
       - name: 'Bundle Repo1 code base for ${{ vars.COLLECTOR }}'
         run: |
