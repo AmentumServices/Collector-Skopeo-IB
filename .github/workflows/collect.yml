@@ -1,6 +1,11 @@
 name: Skopeo IB Collector
 run-name: ${{ github.actor }} is Collecting 🚀
-on: [push]
+on: 
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * 1' # Update weekly on Monday Midnight
 jobs:
   Skopeo:
     runs-on: ubuntu-latest
@@ -44,6 +49,7 @@ jobs:
             -d '{"name":"${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz","label":"TGZ"}'
 
       - run: echo "🍏 This job's status is ${{ job.status }}."
+      
   Code:
     runs-on: ubuntu-latest
     steps:
@@ -57,10 +63,17 @@ jobs:
       - name: Get current date
         id: DATE
         run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Update Submodules
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+          git submodule update --init --recursive
+          git commit -am "${{ steps.date.outputs.date }}: Update Submodules"
+          git push
+
       - name: 'Bundle Repo1 code base for ${{ vars.COLLECTOR }}'
         run: |
-            DATE=`date '+%Y%m%d-%H%M'`
-            git submodule update --init --recursive
             git bundle create --progress ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle --all
             ls -alht *
       - name: Archive artifacts
@@ -77,4 +90,41 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle \
             -d '{"name":"${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle","label":"GIT Bundle"}'
-            env
+
+  Release:
+    runs-on: ubuntu-latest
+    needs: [Code, Skopeo]
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        
+      - name: Get current date
+        id: DATE
+        run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+        
+      - name: Set up git
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+          
+      - name: Create tag
+        uses: rickstaa/action-create-tag@v1
+        id: tag_create
+        with:
+          tag: ${{ steps.date.outputs.date }}
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          tag_exists_error: false
+          message: "Release for ${{ steps.date.outputs.date }} run"
+          
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.date.outputs.date }}
+          make_latest: true
+          files: |
+            ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle
+            ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz
