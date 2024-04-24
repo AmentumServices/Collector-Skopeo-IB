@@ -7,101 +7,101 @@ on:
   schedule:
     - cron: '0 0 * * 1' # Update weekly on Monday Midnight
 jobs:
+  Date:
+    runs-on: ubuntu-latest
+    outputs:
+      Date: ${{ steps.date.outputs.date }}
+    steps:
+       - name: Get current date
+         id: DATE
+         run: |
+           echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+           echo -e "\n$GITHUB_OUTPUT\n"
+           cat $GITHUB_OUTPUT
+
   Skopeo:
+    needs: [Date]
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
         uses: actions/checkout@v4
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: Get current date
-        id: DATE
-        run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
-      - name: Main Skopeo Script
+
+      - name: Install Skopeo
         run: |
-          ls -lah ${{ github.workspace }}
-          DATE=`date '+%Y%m%d-%H%M'`
-          # install deps
-          apt-get update && apt-get install -y skopeo
+          sudo apt-get update -y
+          sudo apt-get install -y skopeo
+
+      - name: Skopeo Login
+        run: |
           skopeo login registry1.dso.mil -u ${{ vars.REGISTRY_USER }} -p ${{ secrets.REGISTRY_TOKEN }}
           skopeo login docker.io -u ${{ vars.DOCKERHUB_USER }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Run Skopeo Sync
+        run: |
           skopeo sync \
               --src-creds=${{ vars.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }} \
               --src yaml --dest dir ${{ vars.COLLECTOR }}.yml ${{ vars.COLLECTOR }}
-          tar -cvzf ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz ${{ vars.COLLECTOR }}
-          ls -alh ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz
-      - name: Archive artifacts
+
+      - name: TARchive Skopeo Output
+        run: |  
+          tar -cvzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz ${{ vars.COLLECTOR }}
+          ls -alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+
+      - name: Directory Contents
+        run: |
+          echo "Directory Contents"
+          ls -lahR
+
+      - name: Upload TARchive
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz
-          path: ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz
-      - name: Publish Artifact
-        run: |
-          curl -L \
-            -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{secrets.GITHUB_TOKEN}}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz \
-            -d '{"name":"${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz","label":"TGZ"}'
-
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
       
   Code:
+    needs: [Date]
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
         uses: actions/checkout@v4
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: Get current date
-        id: DATE
-        run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Update Submodules if needed
+      - name: Setup Git
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
-          git submodule update --init --recursive --remote
 
-      - name: 'Bundle Repo1 code base for ${{ vars.COLLECTOR }}'
+      - name: Update Submodules if needed
+        shell: bash
+        run: git submodule update --init --recursive --remote
+
+      - name: Bundle Repo1 code base for ${{ vars.COLLECTOR }}
         run: |
-            git bundle create --progress ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle --all
+            git bundle create --progress ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle --all
             ls -alht *
-      - name: Archive artifacts
+
+      - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle
-          path: ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle
-      - name: Publish Artifact
-        run: |
-          curl -L \
-            -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/releases/assets/${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle \
-            -d '{"name":"${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle","label":"GIT Bundle"}'
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
+          path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
 
   Release:
     runs-on: ubuntu-latest
-    needs: [Code, Skopeo]
+    needs: [Date, Code, Skopeo]
     permissions:
       contents: write
       pull-requests: read
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-        
-      - name: Get current date
-        id: DATE
-        run: echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Show Artifacts
+        run: ls -alh ${{ vars.COLLECTOR }}-*.*
         
       - name: Set up git
         run: |
@@ -112,17 +112,17 @@ jobs:
         uses: rickstaa/action-create-tag@v1
         id: tag_create
         with:
-          tag: ${{ steps.date.outputs.date }}
+          tag: ${{ needs.Date.outputs.Date }}
           github_token: ${{secrets.GITHUB_TOKEN}}
           tag_exists_error: false
-          message: "Release for ${{ steps.date.outputs.date }} run"
+          message: "Release for ${{ needs.Date.outputs.Date }} run"
           
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.date.outputs.date }}
+          tag_name: ${{ needs.Date.outputs.Date }}
           make_latest: true
           files: |
-            ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.bundle
-            ${{ vars.COLLECTOR }}-${{ steps.date.outputs.date }}.tgz
+            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
+            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
