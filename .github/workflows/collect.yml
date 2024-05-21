@@ -1,23 +1,23 @@
 name: Skopeo IB Collector
 run-name: ${{ github.actor }} is Collecting 🚀
-on: 
+on:
   push:
     branches:
       - main
   schedule:
-    - cron: '0 0 * * 1' # Update weekly on Monday Midnight
+    - cron: "0 0 * * 1" # Update weekly on Monday Midnight
 jobs:
   Date:
     runs-on: ubuntu-latest
     outputs:
       Date: ${{ steps.date.outputs.date }}
     steps:
-       - name: Get current date
-         id: DATE
-         run: |
-           echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
-           echo -e "\n$GITHUB_OUTPUT\n"
-           cat $GITHUB_OUTPUT
+      - name: Get current date
+        id: DATE
+        run: |
+          echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+          echo -e "\n$GITHUB_OUTPUT\n"
+          cat $GITHUB_OUTPUT
 
   Skopeo:
     needs: [Date]
@@ -31,33 +31,34 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y skopeo
 
-      - name: Skopeo Login
+      - name: DSO Login
         run: |
-          skopeo login registry1.dso.mil -u ${{ vars.REGISTRY_USER }} -p ${{ secrets.REGISTRY_TOKEN }}
-          skopeo login docker.io -u ${{ vars.DOCKERHUB_USER }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+          skopeo login registry1.dso.mil -u ${{ secrets.REGISTRY_USER }} -p ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Run Skopeo Sync
         run: |
           skopeo sync \
-              --src-creds=${{ vars.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }} \
               --src yaml --dest dir ${{ vars.COLLECTOR }}.yml ${{ vars.COLLECTOR }}
-
-      - name: TARchive Skopeo Output
-        run: |  
-          tar -cvzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz ${{ vars.COLLECTOR }}
-          ls -alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
       - name: Directory Contents
         run: |
           echo "Directory Contents"
-          ls -lahR
+          ls -lAhS *
+          echo -e "\nDirectory Size"
+          du -hd1 
+
+      - name: TARchive Skopeo Output
+        run: |
+          tar -cvz  --remove-files \
+            -f ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz ${{ vars.COLLECTOR }}
+          ls -alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
       - name: Upload TARchive
         uses: actions/upload-artifact@v4
         with:
           name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
-      
+
   Code:
     needs: [Date]
     runs-on: ubuntu-latest
@@ -76,8 +77,8 @@ jobs:
 
       - name: Bundle Repo1 code base for ${{ vars.COLLECTOR }}
         run: |
-            git bundle create --progress ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle --all
-            ls -alht *
+          git bundle create --progress ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle --all
+          ls -Alht *
 
       - name: Upload bundle
         uses: actions/upload-artifact@v4
@@ -102,12 +103,12 @@ jobs:
 
       - name: Show Artifacts
         run: ls -alh ${{ vars.COLLECTOR }}-*.*
-        
+
       - name: Set up git
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
-          
+
       - name: Create tag
         uses: rickstaa/action-create-tag@v1
         id: tag_create
@@ -116,7 +117,7 @@ jobs:
           github_token: ${{secrets.GITHUB_TOKEN}}
           tag_exists_error: false
           message: "Release for ${{ needs.Date.outputs.Date }} run"
-          
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
