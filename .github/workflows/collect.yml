@@ -51,7 +51,7 @@ jobs:
 
       - name: TARchive Skopeo Output
         run: |
-          tar -cvz  --remove-files \
+          tar -cvz --remove-files \
             -f ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz ${{ vars.COLLECTOR }}
           ls -Alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
