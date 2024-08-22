@@ -158,7 +158,7 @@ jobs:
 
   Release:
     runs-on: ubuntu-latest
-    needs: [Date, Code, Skopeo]
+    needs: [Date, MakeISO]
     permissions:
       contents: write
       pull-requests: read
