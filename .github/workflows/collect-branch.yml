@@ -1,5 +1,5 @@
 name: Skopeo IB Collector (Branch)
-run-name: ${{ github.actor }} is Collecting 🚀
+run-name: ${{ github.actor }} is Collecting a Branch! 🚀
 on:
   push:
     branches-ignore:
