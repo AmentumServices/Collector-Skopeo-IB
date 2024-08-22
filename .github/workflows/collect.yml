@@ -6,6 +6,8 @@ on:
       - main
   schedule:
     - cron: "0 0 * * 1" # Update weekly on Monday Midnight
+  workflow_dispatch:
+
 jobs:
   Date:
     runs-on: ubuntu-latest
@@ -51,7 +53,7 @@ jobs:
         run: |
           tar -cvz  --remove-files \
             -f ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz ${{ vars.COLLECTOR }}
-          ls -alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          ls -Alh ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
       - name: Upload TARchive
         uses: actions/upload-artifact@v4
@@ -86,6 +88,74 @@ jobs:
           name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
 
+  MakeISO:
+    runs-on: ubuntu-latest
+    needs: [Date, Code, Skopeo]
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install mkisofs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y mkisofs isomd5sum
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Show Artifacts
+        run: ls -Alh ${{ vars.COLLECTOR }}-*.*
+
+      - name: Generate Artifact Hash File
+        run: |
+          sha256sum -b ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}* >>\
+            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.sha
+          cat ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.sha
+
+      - name: Upload Artifact Hash File
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.sha
+          path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.sha
+
+      - name: Make ISO
+        run: |
+          mkisofs -J -R -v -T -l \
+            -V '${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}' \
+            -A '${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}' \
+            -o ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso \
+            ${{ vars.COLLECTOR }}-*.* *.md
+
+      - name: Implant MD5 sum into iso
+        run: implantisomd5 ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso
+
+      - name: Generate ISO Hash
+        run: |
+          sha256sum -b ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso >>\
+            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso.sha
+          cat ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso.sha
+
+      - name: Show ISO & Hash
+        run: ls -Alh *.iso*
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso
+          path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso
+          if-no-files-found: error
+
+      - name: Upload ISO Hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso.sha
+          path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.iso.sha
+
   Release:
     runs-on: ubuntu-latest
     needs: [Date, Code, Skopeo]
@@ -102,7 +172,7 @@ jobs:
           merge-multiple: true
 
       - name: Show Artifacts
-        run: ls -alh ${{ vars.COLLECTOR }}-*.*
+        run: ls -Alh ${{ vars.COLLECTOR }}-*.*
 
       - name: Set up git
         run: |
@@ -126,26 +196,22 @@ jobs:
           tag_name: ${{ needs.Date.outputs.Date }}
           make_latest: true
           files: |
-            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle
-            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+            ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}*.*
 
   Sharepoint:
     runs-on: ubuntu-latest
-    needs: [Date, Code, Skopeo]
+    needs: [Date, MakeISO]
     permissions:
       contents: write
       pull-requests: read
     steps:
-      - name: Check out repository code
-        uses: actions/checkout@v4
-
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
       - name: Show Artifacts
-        run: ls -alh ${{ vars.COLLECTOR }}-*.*
+        run: ls -Alh ${{ vars.COLLECTOR }}-*.*
 
       - name: Send Files to Sharepoint
         uses: JacobsFederal/sharepoint-file-upload-action@pappasjfed-patch-1
@@ -153,7 +219,7 @@ jobs:
           file_path: "${{ vars.COLLECTOR }}-*.*"
           host_name: 'jacobsfederal.sharepoint.us'
           site_name: 'USCMSNISSCII.DSO'
-          upload_path: '${{ vars.SHAREPOINT_BASEPATH }}/${{ vars.COLLECTOR }}/${{ needs.Date.outputs.Date }}/'
+          upload_path: '${{ vars.SHAREPOINT_BASEPATH }}/${{ vars.COLLECTOR }}/${{ needs.Date.outputs.Date }}'
           tenant_id: ${{ secrets.SHAREPOINT_TENANT_ID }}
           client_id: ${{ secrets.SHAREPOINT_APP_ID }}
           client_secret: ${{ secrets.SHAREPOINT_APP_SECRET }}
